@@ -1,0 +1,302 @@
+<!DOCTYPE html>
+<html lang="zh-HK">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>李白視像通話</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        /* 隱藏捲軸但保留捲動功能 */
+        .no-scrollbar::-webkit-scrollbar {
+            display: none;
+        }
+        .no-scrollbar {
+            -ms-overflow-style: none;
+            scrollbar-width: none;
+        }
+    </style>
+</head>
+<body class="bg-gray-900 flex items-center justify-center min-h-screen p-4 font-sans text-white">
+
+    <!-- 手機模擬外框 -->
+    <div class="relative w-full max-w-md h-[800px] max-h-[90vh] bg-gray-800 rounded-3xl overflow-hidden shadow-2xl border-4 border-gray-700 flex flex-col">
+        
+        <!-- 頂部視像通話 UI -->
+        <div class="absolute top-0 left-0 w-full p-4 flex justify-between items-start z-10 bg-gradient-to-b from-black/60 to-transparent">
+            <div class="flex items-center gap-2">
+                <i class="fas fa-video"></i>
+                <span class="font-semibold text-sm">與 李白 通話中...</span>
+            </div>
+            <!-- 模擬用戶的小視窗 -->
+            <div class="w-20 h-28 bg-gray-700 rounded-xl border-2 border-gray-500 flex items-center justify-center overflow-hidden shadow-lg">
+                <span class="text-gray-400 text-xs">你的鏡頭</span>
+            </div>
+        </div>
+
+        <!-- 主要視訊區域 (李白 Avatar) -->
+        <div class="flex-1 bg-gradient-to-b from-blue-900 to-indigo-900 flex items-center justify-center relative overflow-hidden pt-10">
+            <div class="w-64 h-64 relative">
+                <svg id="avatar-svg" viewBox="0 0 100 100" class="w-full h-full drop-shadow-2xl transition-all duration-300">
+                    <!-- 背景光暈 -->
+                    <circle cx="50" cy="50" r="48" fill="#fef3c7" opacity="0.5" />
+                    <!-- 臉部 -->
+                    <ellipse cx="50" cy="55" rx="25" ry="30" fill="#fde0c3" />
+                    <!-- 鬍子 -->
+                    <path d="M 30 70 Q 50 100 70 70 Q 50 85 30 70" fill="#333" />
+                    <path d="M 45 70 Q 50 85 55 70" fill="#333" />
+                    <!-- 眼睛 -->
+                    <circle id="eye-left" cx="38" cy="45" r="3" fill="#333" class="transition-all duration-300" />
+                    <circle id="eye-right" cx="62" cy="45" r="3" fill="#333" class="transition-all duration-300" />
+                    <!-- 眉毛 -->
+                    <path id="eyebrow-left" d="M 32 35 Q 38 32 42 36" fill="none" stroke="#333" stroke-width="2" class="transition-all duration-300" transform="rotate(0)" />
+                    <path id="eyebrow-right" d="M 68 35 Q 62 32 58 36" fill="none" stroke="#333" stroke-width="2" class="transition-all duration-300" transform="rotate(0)" />
+                    <!-- 鼻子 -->
+                    <path d="M 50 50 L 48 60 L 52 60 Z" fill="#e8ba94" />
+                    <!-- 嘴巴 -->
+                    <path id="mouth" d="M 45 75 Q 50 78 55 75" fill="none" stroke="#881337" stroke-width="2" class="transition-all duration-100" />
+                    <!-- 帽子 -->
+                    <path d="M 25 35 Q 50 10 75 35 L 70 40 L 30 40 Z" fill="#1e293b" />
+                    <path d="M 40 20 L 40 10 L 60 10 L 60 20 Z" fill="#1e293b" />
+                </svg>
+            </div>
+            
+            <!-- 狀態提示 -->
+            <div id="listening-indicator" class="hidden absolute bottom-4 bg-black/50 text-white px-4 py-2 rounded-full animate-pulse text-sm">
+                正在聆聽您的普通話...
+            </div>
+        </div>
+
+        <!-- 聊天記錄區域 -->
+        <div id="chat-container" class="h-48 bg-gray-900 p-4 overflow-y-auto flex flex-col gap-3 border-t border-gray-700 no-scrollbar">
+            <!-- 初始訊息 -->
+        </div>
+
+        <!-- 控制面板 -->
+        <div class="p-4 bg-gray-800 flex items-center gap-2">
+            <button id="mic-btn" class="p-3 bg-gray-700 text-gray-300 rounded-full hover:bg-gray-600 transition-colors" title="語音輸入 (普通話)">
+                <i class="fas fa-microphone"></i>
+            </button>
+            
+            <input id="text-input" type="text" placeholder="輸入文字與李白對話..." class="flex-1 bg-gray-700 text-white px-4 py-2 rounded-full focus:outline-none focus:ring-2 focus:ring-blue-500" />
+            
+            <button id="send-btn" class="p-3 bg-blue-600 text-white rounded-full hover:bg-blue-700 transition-colors">
+                <i class="fas fa-paper-plane"></i>
+            </button>
+        </div>
+    </div>
+
+    <script>
+        // --- 知識庫與設定 ---
+        const liBaiKnowledge = [
+            { keywords: ['你是誰', '名字', '介紹'], answer: '吾乃李白，字太白，號青蓮居士。唐代詩人，人稱「詩仙」。' },
+            { keywords: ['朝代', '什麼時候的人'], answer: '我生活在盛唐時期，那是一個繁華且充滿詩意的時代。' },
+            { keywords: ['詩', '作品', '寫過什麼', '靜夜思'], answer: '我一生作詩萬首，如《靜夜思》、《將進酒》、《蜀道難》等，皆為世人傳唱。' },
+            { keywords: ['酒', '喝酒'], answer: '哈哈！「呼兒將出換美酒，與爾同銷萬古愁」！我李白一生最愛美酒與明月。' },
+            { keywords: ['朋友', '杜甫'], answer: '我與杜甫是忘年之交，我們曾一同漫遊齊魯，飲酒作詩。' }
+        ];
+
+        const cantoneseWords = ['係', '唔', '咁', '咗', '冇', '嘢', '喺', '睇', '諗'];
+
+        // --- DOM 元素 ---
+        const chatContainer = document.getElementById('chat-container');
+        const textInput = document.getElementById('text-input');
+        const sendBtn = document.getElementById('send-btn');
+        const micBtn = document.getElementById('mic-btn');
+        const listeningIndicator = document.getElementById('listening-indicator');
+
+        // SVG 元素
+        const mouth = document.getElementById('mouth');
+        const eyeLeft = document.getElementById('eye-left');
+        const eyeRight = document.getElementById('eye-right');
+        const eyebrowLeft = document.getElementById('eyebrow-left');
+        const eyebrowRight = document.getElementById('eyebrow-right');
+
+        let isListening = false;
+        let talkInterval = null;
+
+        // --- 語音辨識 (STT) 初始化 ---
+        const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+        let recognition = null;
+        if (SpeechRecognition) {
+            recognition = new SpeechRecognition();
+            recognition.continuous = false;
+            recognition.interimResults = false;
+            recognition.lang = 'cmn-Hans-CN'; // 強制普通話
+
+            recognition.onresult = (event) => {
+                const transcript = event.results[0][0].transcript;
+                handleUserMessage(transcript);
+                stopListening();
+            };
+
+            recognition.onerror = (event) => {
+                console.error('Speech recognition error', event.error);
+                stopListening();
+            };
+
+            recognition.onend = () => {
+                stopListening();
+            };
+        } else {
+            console.warn("此瀏覽器不支援語音辨識 API");
+        }
+
+        // --- 核心邏輯 ---
+
+        function addMessage(sender, text) {
+            const msgDiv = document.createElement('div');
+            msgDiv.className = `max-w-[80%] p-3 rounded-2xl text-sm ${
+                sender === 'user' 
+                    ? 'bg-blue-600 text-white self-end rounded-br-none' 
+                    : 'bg-gray-700 text-gray-100 self-start rounded-bl-none'
+            }`;
+            msgDiv.textContent = text;
+            chatContainer.appendChild(msgDiv);
+            chatContainer.scrollTop = chatContainer.scrollHeight;
+        }
+
+        function setExpression(exp) {
+            if (exp === 'confused') {
+                eyeLeft.setAttribute('cy', '45');
+                eyeRight.setAttribute('cy', '45');
+                eyebrowLeft.setAttribute('transform', 'rotate(15 35 35)');
+                eyebrowRight.setAttribute('transform', 'rotate(-15 65 35)');
+                mouth.setAttribute('d', 'M 45 78 Q 50 75 55 78');
+            } else if (exp === 'happy') {
+                eyeLeft.setAttribute('cy', '42');
+                eyeRight.setAttribute('cy', '42');
+                eyebrowLeft.setAttribute('transform', 'rotate(-10 35 35)');
+                eyebrowRight.setAttribute('transform', 'rotate(10 65 35)');
+                mouth.setAttribute('d', 'M 40 75 Q 50 85 60 75');
+            } else { // normal
+                eyeLeft.setAttribute('cy', '45');
+                eyeRight.setAttribute('cy', '45');
+                eyebrowLeft.setAttribute('transform', 'rotate(0)');
+                eyebrowRight.setAttribute('transform', 'rotate(0)');
+                mouth.setAttribute('d', 'M 45 75 Q 50 78 55 75');
+            }
+        }
+
+        function speak(text, exp) {
+            if ('speechSynthesis' in window) {
+                window.speechSynthesis.cancel();
+                const utterance = new SpeechSynthesisUtterance(text);
+                utterance.lang = 'zh-CN'; // 強制普通話
+                utterance.pitch = 0.6; // 偏老聲線
+                utterance.rate = 0.9; // 語速稍慢
+
+                utterance.onstart = () => {
+                    setExpression(exp);
+                    let mouthOpen = false;
+                    // 模擬嘴巴開合
+                    talkInterval = setInterval(() => {
+                        mouthOpen = !mouthOpen;
+                        if (mouthOpen) {
+                            mouth.setAttribute('d', 'M 40 75 Q 50 85 60 75 Q 50 90 40 75');
+                            mouth.setAttribute('fill', '#881337');
+                        } else {
+                            setExpression(exp); // 恢復當前表情的嘴型
+                            mouth.setAttribute('fill', 'none');
+                        }
+                    }, 200);
+                };
+
+                utterance.onend = () => {
+                    clearInterval(talkInterval);
+                    mouth.setAttribute('fill', 'none');
+                    setExpression('normal');
+                };
+
+                window.speechSynthesis.speak(utterance);
+            }
+        }
+
+        function handleUserMessage(text) {
+            if (!text.trim()) return;
+            
+            addMessage('user', text);
+            textInput.value = '';
+
+            // 檢查是否包含粵語字
+            const hasCantonese = cantoneseWords.some(word => text.includes(word));
+            
+            setTimeout(() => {
+                if (hasCantonese) {
+                    const reply = "我不懂你說什麼。請用普通話與我交談。";
+                    addMessage('bot', reply);
+                    speak(reply, 'confused');
+                    return;
+                }
+
+                // 搜尋知識庫
+                let reply = "這問題甚是深奧，容我再飲一杯酒想想。";
+                let exp = 'normal';
+
+                for (const item of liBaiKnowledge) {
+                    if (item.keywords.some(kw => text.includes(kw))) {
+                        reply = item.answer;
+                        if (text.includes('酒')) exp = 'happy';
+                        break;
+                    }
+                }
+
+                addMessage('bot', reply);
+                speak(reply, exp);
+            }, 500);
+        }
+
+        // --- 事件綁定 ---
+        function startListening() {
+            if (recognition) {
+                try {
+                    recognition.start();
+                    isListening = true;
+                    micBtn.classList.replace('bg-gray-700', 'bg-red-500');
+                    micBtn.classList.replace('text-gray-300', 'text-white');
+                    micBtn.classList.add('animate-pulse');
+                    listeningIndicator.classList.remove('hidden');
+                } catch (e) {
+                    console.error("麥克風啟動失敗", e);
+                }
+            } else {
+                alert("您的瀏覽器不支援語音辨識功能。");
+            }
+        }
+
+        function stopListening() {
+            if (recognition) recognition.stop();
+            isListening = false;
+            micBtn.classList.replace('bg-red-500', 'bg-gray-700');
+            micBtn.classList.replace('text-white', 'text-gray-300');
+            micBtn.classList.remove('animate-pulse');
+            listeningIndicator.classList.add('hidden');
+        }
+
+        micBtn.addEventListener('click', () => {
+            if (isListening) {
+                stopListening();
+            } else {
+                startListening();
+            }
+        });
+
+        sendBtn.addEventListener('click', () => {
+            handleUserMessage(textInput.value);
+        });
+
+        textInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                handleUserMessage(textInput.value);
+            }
+        });
+
+        // 初始問候
+        window.onload = () => {
+            const initMsg = '你好！吾乃李白。請問閣下有何指教？';
+            addMessage('bot', initMsg);
+            // 注意：瀏覽器通常不允許自動播放語音，需等待使用者互動後才能發聲
+        };
+    </script>
+</body>
+</html>
